@@ -23,6 +23,8 @@
 #define BTN_SHORT_TICKS       (300 / PIN_TMR_DURATION)
 #define BTN_LONG_TICKS        (1000 / PIN_TMR_DURATION)
 
+#define SWITCH_DOUBLE_CLICK_THRESHOLD_TICKS 100 // Time for two switch toggles to be seen as a double click.
+
 #define WIFI_LED_FAST_BLINK_DURATION 250
 #define WIFI_LED_SLOW_BLINK_DURATION 500
 
@@ -391,6 +393,7 @@ void PIN_SetPinRoleForPinIndex(int index, int role) {
 		case IOR_Button_n:
 		case IOR_Button_ToggleAll:
 		case IOR_Button_ToggleAll_n:
+		case IOR_Switch:
 			{
 				pinButton_s *bt = &g_buttons[index];
 
@@ -514,7 +517,8 @@ static void Channel_OnChanged(int ch, int prevValue, int iFlags) {
 				bCallCb = 1;
 			}
 			else if(g_cfg.pins.roles[i] == IOR_DigitalInput || g_cfg.pins.roles[i] == IOR_DigitalInput_n
-				|| g_cfg.pins.roles[i] == IOR_DigitalInput_NoPup || g_cfg.pins.roles[i] == IOR_DigitalInput_NoPup_n) {
+				|| g_cfg.pins.roles[i] == IOR_DigitalInput_NoPup || g_cfg.pins.roles[i] == IOR_DigitalInput_NoPup_n
+				|| g_cfg.pins.roles[i] == IOR_Switch) {
 				bCallCb = 1;
 			}
 			else if(g_cfg.pins.roles[i] == IOR_ToggleChannelOnToggle) {
@@ -878,6 +882,68 @@ void PIN_Input_Handler(int pinIndex)
 	}
 }
 
+void PIN_Switch_Input_Handler(int pinIndex) {
+
+	// Get input level.
+	pinButton_s* handle;
+	uint8_t read_gpio_level;
+
+	handle = &g_buttons[pinIndex];
+	if (handle->hal_button_Level != 0) {
+		read_gpio_level = handle->hal_button_Level(handle);
+	}
+	else {
+		read_gpio_level = handle->button_level;
+	}
+
+	// Tick counter if state is not idle.
+	if((handle->state) > 0) {
+		handle->ticks++;
+	}
+
+	// Detect input level changes with debounce.
+	bool inputLevelChanged = 0;
+	if(read_gpio_level != handle->button_level) {
+		if(++(handle->debounce_cnt) >= BTN_DEBOUNCE_TICKS) {
+			handle->button_level = read_gpio_level;
+			handle->debounce_cnt = 0;
+			inputLevelChanged = 1;
+		}
+	} else {
+		handle->debounce_cnt = 0;
+	}
+
+	// Switch state machine.
+	switch(handle->state) {
+		case 0: { // Idle (initial state).
+			if (inputLevelChanged) {
+				handle->state = 1;
+				handle->ticks = 0;
+			}
+			break;
+		}
+		case 1: { // Input changed but double toggle delay is not over yet.
+			if (inputLevelChanged) {
+
+				// Fire OnDblClick event and toggle channels.
+				EventHandlers_FireEvent(CMD_EVENT_PIN_ONDBLCLICK, pinIndex);
+				CHANNEL_Toggle(g_cfg.pins.channels2[pinIndex]);
+
+				// Reset state.
+				handle->state = 0;
+			} else if (handle->ticks > SWITCH_DOUBLE_CLICK_THRESHOLD_TICKS) {
+
+				// Fire OnClick event and toggle channels.
+				EventHandlers_FireEvent(CMD_EVENT_PIN_ONCLICK, pinIndex);
+				CHANNEL_Toggle(g_cfg.pins.channels[pinIndex]);
+
+				// Reset state.
+				handle->state = 0;
+			}
+			break;
+		}
+	}
+}
 
 static void PIN_set_wifi_led(int value){
 	int i;
@@ -1008,6 +1074,8 @@ void PIN_ticks(void *param)
 				}
 				g_timesUp[i] = 0;
 			}
+		} else if(g_cfg.pins.roles[i] == IOR_Switch) {
+			PIN_Switch_Input_Handler(i);
 		}
 	}
 }

@@ -38,6 +38,8 @@ enum IORole {
 
 	IOR_PWM_n,
 
+	IOR_Switch,
+
 	IOR_Total_Options,
 };
 

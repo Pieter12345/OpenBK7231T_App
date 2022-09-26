@@ -352,6 +352,7 @@ const char *htmlPinRoleNames[] = {
 	"BP5758D_DAT",
 	"BP5758D_CLK",
 	"PWM_n",
+	"Switch",
 	"error",
 	"error",
 	"error",

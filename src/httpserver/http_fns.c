@@ -1622,7 +1622,7 @@ int http_fn_cfg_pins(http_request_t *request) {
         poststr(request, "</select>");
         hprintf128(request, "<input class=\"hele\" name=\"r%i\" type=\"text\" value=\"%i\"/>",i,ch);
 
-		if(si == IOR_Button || si == IOR_Button_n)
+		if(si == IOR_Button || si == IOR_Button_n || si == IOR_Switch)
 		{
 			// extra param. For button, is relay index to toggle on double click
 			hprintf128(request, "<input class=\"hele\" name=\"e%i\" type=\"text\" value=\"%i\"/>",i,ch2);
